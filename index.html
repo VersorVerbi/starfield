@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Starfield</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body, html {
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+        #starfield {
+            width: 100%;
+        }
+        #settings {
+            position: fixed;
+            left: 100%;
+            top: 32px;
+            transition: left 100ms ease-in-out;
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            width: 200px;
+            z-index: 11;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 8px;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #settings.visible {
+            left: calc(100% - 200px);
+        }
+        input {
+            max-width: 75px;
+        }
+        #settings label, #settings select, #settings input {
+            flex-basis: 33%;
+            flex-grow: 1;
+            flex-shrink: 1;
+        }
+        #settings-hover {
+            position: fixed;
+            width: 200px;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+<div id="settings-hover" onmouseenter="showSettings()" onmouseleave="hideSettings()">
+<form id="settings">
+    <label for="ratio">Aspect ratio:</label>
+    <select id="ratio" onchange="setRatio()">
+        <option>4:3</option>
+        <option>16:9</option>
+        <option>16:10</option>
+        <option>21:9</option>
+        <option>32:9</option>
+    </select>
+    <label for="speed">Speed:</label>
+    <input type="number" id="speed" value="1" min="1" max="10" step="1" onchange="setSpeed()" />
+    <label for="count">Number of Stars:</label>
+    <select id="count" onchange="setCount()">
+        <option value="100">Very sparse</option>
+        <option value="250">Sparse</option>
+        <option value="500">Moderate</option>
+        <option value="1000">Dense</option>
+        <option value="2500">Very dense</option>
+    </select>
+</form>
+</div>
+<canvas id="starfield" height="768" width="1024">
+    Your device/browser/OS does not support &lt;canvas&gt; elements. Otherwise you would see the old Windows screensaver "Starfield."
+</canvas>
+<script>
+    function moveStar(x, y, r) {
+        // calculate slope from midpoint
+        // y2 - y1 / x2 - x1 where (x1, y1) = (0, 0) on a Cartesian plane
+
+        const m = (y - (canvasDimensions.height / 2))/(x - (canvasDimensions.width / 2));
+
+        const shortestDistToClosestEdge = Math.min(x, canvasDimensions.width - x, y, canvasDimensions.height - y);
+        let additive = 0;
+        if (shortestDistToClosestEdge < 100) {
+            additive = 1;
+        } else if (shortestDistToClosestEdge < 50) {
+            additive = 5;
+        } else if (shortestDistToClosestEdge < 25) {
+            additive = 10;
+        }
+
+        const movementAmount = r * speed.multiplier + additive;
+        // to calculate new X and Y coordinates, we know that y = mx (because all intersect at (0,0))
+        // so x^2 + mx^2 = movementAmount^2
+        // so ... x = movementAmount / (sqrt(m^2 + 1))
+        const xDelta = movementAmount / Math.sqrt(Math.pow(m, 2) + 1);
+        const yDelta = m * xDelta;
+
+        // do we go left or right? that depends on whether our original X is "negative" (to the left of the
+        // midpoint) or "positive" (to the right)
+        const xDir = (x < (canvasDimensions.width / 2)) ? -1 : 1;
+
+        x += (xDelta * xDir);
+        y += (yDelta * xDir);
+        r += 0.025;
+        if (x < 0 || x > canvasDimensions.width || y < 0 || y > canvasDimensions.height) return null;
+        makeAnyStar(ctx, x, y, r);
+        return [x, y, r];
+    }
+
+    function makeNewStar(ctx) {
+        let x = Math.random() * canvasDimensions.width;
+        let y = Math.random() * canvasDimensions.height;
+        let r = Math.random() * 0.5;
+        makeAnyStar(ctx, x, y, r);
+
+        return [x, y, r];
+    }
+
+    function makeAnyStar(ctx, x, y, r) {
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(x, y, r, 2 * Math.PI, 0);
+        ctx.fill();
+    }
+
+    function draw() {
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvasDimensions.width, canvasDimensions.height);
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvasDimensions.width, canvasDimensions.height);
+        for (let s = 0; s < stars.length; s++) {
+            if (stars[s]) stars[s] = moveStar(stars[s][0], stars[s][1], stars[s][2]);
+            else stars[s] = makeNewStar(ctx);
+        }
+        window.requestAnimationFrame(draw);
+    }
+
+    function setRatio() {
+        const newRatio = document.getElementById('ratio')?.value;
+        const canvas = document.getElementById('starfield');
+        switch(newRatio) {
+            case "32:9":
+                canvasDimensions.width = 3200;
+                canvasDimensions.height = 900;
+                break;
+            case "21:9":
+                canvasDimensions.width = 2100;
+                canvasDimensions.height = 900;
+                break;
+            case "16:10":
+                canvasDimensions.width = 1600;
+                canvasDimensions.height = 1000;
+                break;
+            case "16:9":
+                canvasDimensions.width = 1600;
+                canvasDimensions.height = 900;
+                break;
+            case "4:3":
+            default:
+                canvasDimensions.width = 1024;
+                canvasDimensions.height = 768;
+                break;
+        }
+        canvas.width = canvasDimensions.width;
+        canvas.height = canvasDimensions.height;
+    }
+
+    function setSpeed() {
+        const newSpeed = parseInt(document.getElementById('speed')?.value);
+        if (!isNaN(newSpeed) && newSpeed) {
+            switch (newSpeed) {
+                case 10:
+                    speed.multiplier = 8;
+                    break;
+                case 9:
+                    speed.multiplier = 6;
+                    break;
+                case 8:
+                    speed.multiplier = 4;
+                    break;
+                case 7:
+                    speed.multiplier = 3;
+                    break;
+                case 6:
+                    speed.multiplier = 2.5;
+                    break;
+                case 5:
+                    speed.multiplier = 2;
+                    break;
+                case 4:
+                    speed.multiplier = 1.75;
+                    break;
+                case 3:
+                    speed.multiplier = 1.5;
+                    break;
+                case 2:
+                    speed.multiplier = 1.25;
+                    break;
+                case 1:
+                default:
+                    speed.multiplier = 1.1;
+                    break;
+            }
+        }
+    }
+
+    function setCount() {
+        const newCount = parseInt(document.getElementById('count')?.value);
+        if (!isNaN(newCount) && newCount) {
+            const canvas = document.getElementById('starfield');
+            const ctx = canvas.getContext('2d');
+            stars.splice(0, stars.length);
+            for (let i = 0; i < newCount; i++) {
+                stars.push(makeNewStar(ctx));
+            }
+        }
+    }
+
+    function showSettings() {
+        document.getElementById('settings').classList.add('visible');
+    }
+
+    function hideSettings() {
+        document.getElementById('settings').classList.remove('visible');
+    }
+
+    const canvasDimensions = { width: 0, height: 0 };
+    setRatio();
+    const speed = { multiplier: 0 };
+    setSpeed();
+    const canvas = document.getElementById('starfield');
+    const ctx = canvas.getContext('2d');
+    const stars = [];
+    for (let i = 0; i < 0; i++) {
+        stars.push(makeNewStar(ctx));
+    }
+    setCount();
+
+    window.requestAnimationFrame(draw);
+</script>
+</body>
+</html>
